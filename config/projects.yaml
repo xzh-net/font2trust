@@ -1,0 +1,30 @@
+# 待扫描项目清单（公开模板）
+#
+# 公开版不存内网地址与凭证，全部通过环境变量注入：
+#   export GITLAB_HOST=your-gitlab.example.com     # 你的 GitLab 地址
+#   export GITLAB_TOKEN=xxxx                        # 只读 token（read_repository）
+#
+# 内部使用：真实配置见 config/projects.local.yaml（已被 .gitignore 排除，不入库），
+# 运行时：python -m scripts.main --projects config/projects.local.yaml
+#
+# 模式:
+#   manual - 显式列出仓库 URL（支持 ${ENV:-默认值} 插值与 URL 后缀 #分支）
+#   local  - 只扫描本地目录（不执行 git），适合离线/冒烟
+#   auto   - GitLab API 自动发现（二期）
+
+mode: manual
+
+projects:
+  - name: backend
+    url: http://oauth2:${GITLAB_TOKEN:-placeholder}@127.0.0.1:80/your-group/your-backend.git#develop
+    enabled: true                # 改为你的扫描目标
+
+  - name: frontend
+    url: http://oauth2:${GITLAB_TOKEN:-placeholder}@127.0.0.1:80/your-group/your-frontend.git
+    enabled: false
+
+# local 模式扫描目录（mode: local 时生效）
+local_paths: []
+
+# 排除的项目名
+exclude: []

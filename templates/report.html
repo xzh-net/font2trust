@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>$title</title>
+<style>
+  :root { --high:#d93025; --medium:#f9ab00; --low:#188038; --info:#1a73e8; }
+  * { box-sizing:border-box; }
+  body { font-family:"Microsoft YaHei",-apple-system,Segoe UI,sans-serif; margin:0;
+         background:#f5f6f8; color:#202124; }
+  header { background:#1a2b4a; color:#fff; padding:20px 32px; }
+  header h1 { margin:0 0 6px; font-size:22px; }
+  header .meta { font-size:13px; color:#a8b3cf; }
+  .wrap { max-width:1440px; margin:0 auto; padding:24px 32px 48px; }
+  h2 { font-size:17px; margin:28px 0 10px; padding-left:8px;
+       border-left:4px solid #1a2b4a; }
+  .statbar { display:flex; gap:12px; flex-wrap:wrap; margin:8px 0 6px; }
+  .statbar span { background:#fff; border-radius:8px; padding:7px 14px; font-size:13px;
+                  box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0; }
+  .chip { background:#fff; border:1px solid #dadce0; border-radius:14px;
+          padding:4px 12px; font-size:12px; }
+  .chip.sys { color:#80868b; background:#f8f9fa; }
+  .chip.miss { color:#c5221f; background:#fce8e6; border-color:#f5c6c0; }
+  .cc { display:inline-block; padding:3px 12px; border-radius:12px; font-size:12px;
+        font-weight:600; white-space:nowrap; }
+  .cc-allow { background:#e6f4ea; color:#137333; border:1px solid #b7e1c4; }
+  .cc-deny { background:#fce8e6; color:#c5221f; border:1px solid #f5c6c0; }
+  .cc-pending { background:#fef7e0; color:#b06000; border:1px solid #f9e3a7; }
+  .cc-tech { background:#f1f3f4; color:#5f6368; border:1px solid #dadce0; }
+  .note { background:#e8f0fe; border-radius:8px; padding:10px 16px; font-size:13px;
+          margin:6px 0 10px; color:#1a3a6b; line-height:1.7; }
+  .filters { margin:8px 0 6px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .filters .tag { font-size:12px; color:#80868b; margin-right:4px; }
+  .filters button { border:1px solid #dadce0; background:#fff; border-radius:16px;
+                    padding:5px 14px; font-size:13px; cursor:pointer; }
+  .filters button.on { background:#1a2b4a; color:#fff; border-color:#1a2b4a; }
+  table { width:100%; border-collapse:collapse; background:#fff; font-size:13px;
+          box-shadow:0 1px 3px rgba(0,0,0,.08); border-radius:8px; overflow:hidden; }
+  th { background:#eef1f6; text-align:left; padding:9px 12px; font-weight:600; white-space:nowrap; }
+  td { padding:9px 12px; border-top:1px solid #f0f1f3; vertical-align:top; }
+  tr.hidden { display:none; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px;
+           font-weight:600; color:#fff; white-space:nowrap; }
+  .badge-high { background:var(--high); } .badge-medium { background:var(--medium); }
+  .badge-low { background:var(--low); } .badge-info { background:var(--info); }
+  .rv, .lc { display:inline-block; padding:1px 8px; border-radius:10px;
+             font-size:11px; white-space:nowrap; margin:1px 2px 1px 0; }
+  .rv-pending { background:#e8eaed; color:#3c4043; }
+  .rv-eval { background:#fef7e0; color:#b06000; }
+  .rv-ok { background:#e6f4ea; color:#137333; }
+  .rv-fixed { background:#e8f0fe; color:#1a73e8; }
+  .rv-none { background:#f1f3f4; color:#80868b; }
+  .lc-id { background:#e8f0fe; color:#1a73e8; }
+  .lc-sup { background:#fef7e0; color:#b06000; }
+  .lc-ok { background:#e6f4ea; color:#137333; }
+  .lc-conf { background:#fce8e6; color:#c5221f; }
+  .lc-unk { background:#f1f3f4; color:#5f6368; }
+  .path { font-family:Consolas,monospace; font-size:12px; word-break:break-all; max-width:320px; }
+  .ev { font-size:12px; color:#3c4043; max-width:330px; }
+  .ev li { margin:2px 0; }
+  .sug { max-width:200px; }
+  .muted { color:#80868b; font-size:12px; }
+  .hit { display:inline-block; background:#fce8e6; color:#a50e0e; border-radius:10px;
+         padding:1px 8px; font-size:11px; margin-left:6px; }
+  .alert { display:block; background:#fce8e6; color:#c5221f; border-radius:6px;
+           padding:4px 8px; font-size:11px; margin-top:4px; }
+  .chain { font-size:12px; color:#1a73e8; }
+  details summary { cursor:pointer; color:#1a73e8; font-size:12px; }
+  .filelist { margin-top:6px; background:#f8f9fa; border-radius:6px; padding:8px 10px; }
+  .filelist .f { font-family:Consolas,monospace; font-size:12px; word-break:break-all; }
+  .filelist .loc { font-family:Consolas,monospace; font-size:11px; color:#5f6368;
+                   margin-left:18px; word-break:break-all; }
+  .own { background:#fff; border-radius:8px; padding:12px 16px; font-size:13px;
+         box-shadow:0 1px 3px rgba(0,0,0,.08); margin-bottom:10px; line-height:1.9; }
+  .kw { background:#fff; border-radius:8px; padding:12px 16px; font-size:13px;
+        box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .empty { display:none; background:#fff; border-radius:8px; padding:18px;
+           text-align:center; color:#80868b; margin-top:8px; }
+  .disclaimer { margin-top:28px; padding:14px 18px; background:#fff8e1;
+                border-left:4px solid var(--medium); font-size:13px; border-radius:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>$title</h1>
+  <div class="meta">生成时间：$gen_time ｜ 扫描仓库：$repos ｜
+    五区块结构 · 四结论与风险等级分离 · 扫描只收集证据，不替代授权判断</div>
+</header>
+<div class="wrap">
+
+  <h2>01｜字体使用总览</h2>
+  <div class="statbar">
+    <span>字体系列 <b>$a_series</b></span>
+    <span>字体文件 <b>$a_files</b>（去重）/ <b>$a_locs</b> 处位置</span>
+    <span>被 CSS 引用 <b>$a_ref</b></span>
+    <span>未见引用 <b>$a_unref</b></span>
+    <span>解析成功/失败 <b>$a_ok</b>/<b>$a_fail</b></span>
+    <span>CSS 字体名称引用 <b>$a_namefam</b> 个</span>
+  </div>
+  <div class="note"><b>两类分开统计</b>：实际字体资产 = 仓库内的 TTF/OTF/WOFF/WOFF2/EOT 文件；
+    字体名称引用 = CSS font-family 中出现的名称（含系统字体回退，<b>不代表仓库包含该字体</b>）。</div>
+  <div class="chips">
+    <span class="chip" style="border-color:#1a73e8">📦 资产：$asset_chips</span>
+  </div>
+  <div class="chips">$name_chips</div>
+  <table>
+    <thead><tr>
+      <th>项目</th><th>扫描文件</th><th>字体系列/文件(去重)</th><th>解析成功/失败</th>
+      <th>CSS引用</th><th>ScanCode</th><th>LICENSE文件</th><th>自有/第三方文件</th>
+    </tr></thead>
+    <tbody>
+$coverage_rows
+    </tbody>
+  </table>
+
+  <h2>02｜字体授权结论</h2>
+  <div class="statbar">
+    <span class="cc cc-allow">已确认允许：$c_allow</span>
+    <span class="cc cc-deny">已确认不允许：$c_deny</span>
+    <span class="cc cc-pending">授权待确认：$c_pending</span>
+    <span class="cc cc-tech">技术无法判断：$c_tech</span>
+    <span>使用状态：正在使用 $u_using · 存在引用未确认运行时 $u_ref · 未发现引用 $u_noref</span>
+  </div>
+  <div class="note">扫描工具只发现和收集证据，<b>不替代授权判断</b>：
+    「已确认允许」仅来自人工核实登记（config/whitelist.yaml · active）；
+    「已确认不允许」需"许可证明确禁止当前使用方式"的人工判定，扫描器不自动产生。</div>
+  <table>
+    <thead><tr>
+      <th>字体</th><th>授权结论</th><th>使用状态</th><th>许可证状态</th>
+      <th>版本 / 来源</th><th>问题原因</th><th>处理建议</th><th>证据目录</th>
+    </tr></thead>
+    <tbody id="tb-concl">
+$concl_rows
+    </tbody>
+  </table>
+
+  <h2>03｜授权证据详情</h2>
+  <div class="note">每个字体展示：许可证原文（<code>font-compliance/&lt;字体&gt;/LICENSE.txt</code>）、
+    官方来源、版本、适用文件、授权范围与审核记录；证据缺失时如实标注，<b>不补写许可证</b>。</div>
+  <table>
+    <thead><tr>
+      <th>字体 / 版本 / CSS提示</th><th>官方来源(上游)</th>
+      <th>许可证(状态 · 表达式 · 原文)</th><th>授权范围(允许 / 限制)</th>
+      <th>判定证据</th><th>审核记录</th><th>适用文件</th>
+    </tr></thead>
+    <tbody id="tb-series">
+$series_rows
+
+</tbody>
+  </table>
+
+  <h2>04｜问题整改清单</h2>
+  <div class="note">整改方式五类：① 已确认允许→保留+补声明　② 已确认不允许→删除/替换　
+    ③ 找不到许可证→追溯上游　④ 未被实际使用→清理　⑤ 技术无法判断→补人工检查。
+    责任人/期限为占位（待指派），复查结果在整改后重扫时回填。</div>
+  <table>
+    <thead><tr>
+      <th>#</th><th>对象</th><th>问题原因</th><th>整改方式</th>
+      <th>涉及文件</th><th>责任人</th><th>整改期限</th><th>复查结果</th>
+    </tr></thead>
+    <tbody id="tb-remed">
+$remed_rows
+    </tbody>
+  </table>
+
+  <h2>05｜CSS 引用与部署关系</h2>
+  <div class="note"><b>证据链</b>：CSS → @font-face → 字体文件 → 字体版本 → 许可证证据（见关联列）。
+    <b>部署关系待确认</b>：以下模块均包含同一套字体（sha256 重复），是否都参与最终部署需部署侧确认，
+    未确认前不删除重复资源。$deploy_note</div>
+  <table>
+    <thead><tr>
+      <th>类型</th><th>位置</th><th>引用值</th><th>格式</th>
+      <th>本地关联</th><th>证据链 → 字体系列</th><th>处置</th>
+    </tr></thead>
+    <tbody id="tb-css">
+$css_rows
+    </tbody>
+  </table>
+
+  <h2>06｜第三方组件合规（独立统计与筛选）</h2>
+  <div class="statbar">
+    <span>实例 <b>$st_instances</b></span><span>唯一组件 <b>$st_unique</b></span>
+    <span>跨实例重复文件 <b>$st_dup</b></span>
+    <span>🟢 低危 <b>$st_low</b></span><span>🟡 中危 <b>$st_medium</b></span>
+    <span>待确认 <b>$st_pending</b> · 已核实 <b>0</b></span>
+  </div>
+  <div class="own"><b>自有代码五分类</b>：$own_categories<br>
+    <b>仓库根许可证</b>：$own_declared<br>
+    <span class="muted">自有代码检出许可证（原始证据）：</span> $own_exprs $copyleft_block</div>
+  <div class="filters">
+    <span class="tag">组件筛选：</span>
+    <button class="on" data-scope="comp" data-lv="all" onclick="setCompFilter('all')">全部</button>
+    <button data-scope="comp" data-lv="low" onclick="setCompFilter('low')">低危</button>
+    <button data-scope="comp" data-lv="medium" onclick="setCompFilter('medium')">中危</button>
+  </div>
+  <table>
+    <thead><tr>
+      <th>等级</th><th>审核状态</th><th>许可证状态</th><th>组件 / 目录</th>
+      <th>文件数</th><th>检测到的许可证</th><th>组件内LICENSE</th><th>评估说明</th>
+    </tr></thead>
+    <tbody id="tb-repo">
+$repo_rows
+    </tbody>
+  </table>
+
+  <h2>07｜商业字体名称线索（仅辅助识别）</h2>
+  <div class="kw">词库 <b>$kw_count</b> 条关键词，本次命中 <b>$kw_hits</b> 个字体系列。
+    <span class="muted">声明：命中仅用于辅助识别，不代表授权状态或侵权结论。</span><br>
+    <span class="muted">$kw_list</span></div>
+
+  <div id="empty-font" class="empty">当前筛选条件下无匹配项</div>
+  <div id="empty-comp" class="empty" style="display:none">当前组件筛选条件下无匹配项</div>
+
+  <div class="disclaimer">
+    ⚠️ <b>免责声明</b>：本报告为自动化检测与证据归档产出，<b>不构成侵权结论</b>。
+    许可证元数据缺失 ≠ 未获授权；识别到许可证 ≠ 已完成核验；fsType 限制 ≠ 禁止商用。
+    「已确认允许/不允许」以技术部负责人审核签署为准。
+  </div>
+</div>
+<script>
+function applyFilter(rows, level) {
+  var visible = 0;
+  rows.forEach(function (tr) {
+    var show = true;
+    if (level === 'commercial') show = tr.dataset.commercial === '1';
+    else if (level !== 'all') show = tr.dataset.level === level;
+    tr.classList.toggle('hidden', !show);
+    if (show) visible++;
+  });
+  return visible;
+}
+function setFilter(level) {
+  document.querySelectorAll('.filters button[data-scope!="comp"]').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.lv === level);
+  });
+  var v = applyFilter(document.querySelectorAll(
+    '#tb-concl tr, #tb-series tr, #tb-remed tr, #tb-css tr'), level);
+  document.getElementById('empty-font').style.display = v ? 'none' : 'block';
+}
+function setCompFilter(level) {
+  document.querySelectorAll('.filters button[data-scope="comp"]').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.lv === level);
+  });
+  var v = applyFilter(document.querySelectorAll('#tb-repo tr'), level);
+  document.getElementById('empty-comp').style.display = v ? 'none' : 'block';
+}
+</script>
+</body>
+</html>

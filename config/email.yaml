@@ -1,0 +1,20 @@
+# 邮件配置（占位 · 二期接入 SMTP 后启用）
+# 敏感项只写环境变量名，密码不落盘：
+#   export SMTP_PASSWORD=xxxx
+
+enabled: false              # 占位期 false：仅渲染 email_preview.html，不联网
+
+host: smtp.example.com      # TODO 二期提供
+port: 465
+use_ssl: true
+username: scanner@example.com
+password_env: SMTP_PASSWORD # 环境变量名
+from: font-scanner@example.com
+subject_prefix: "[字体合规]"
+
+recipients:                 # 收件人（支持多人），二期配置
+  - tech-lead@example.com   # TODO 技术部负责人
+cc: []
+
+only_on_risk: false         # true = 仅高危/中危时发信；false = 每次扫描都发摘要
+attach_report: true         # 附带 report.html

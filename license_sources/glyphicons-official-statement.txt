@@ -1,0 +1,31 @@
+ Glyphicons 官方授权声明（归档 · 无随包 LICENSE 的字体记录官方声明与出处）
+
+来源1: glyphicons.com/glyphicons-licenses/
+  (经 twbs/bootstrap#4485 引用, 核实日期 2026-11-09)
+
+  "Glyphicons Halflings are also a part of Bootstrap by Twitter, and are
+  released under the same license as Bootstrap. While you are not required
+  to include attribution on your Bootstrap-based projects, I'd certainly
+  appreciate a visible link back to glyphicons.com in any place you find
+  appropriate (footer, docs, etc)."
+
+来源2: glyphicons.com 旧版许可页 (经公开 OSS 声明引用)
+
+  "GLYPHICONS Halflings font is also released as an extension of Bootstrap
+  (www.getbootstrap.com) for free and it is released under the same license
+  as Bootstrap v3.3.7. While you are not required to include attribution on
+  your Bootstrap-based projects, I would certainly appreciate any form of
+  support."
+
+来源3: Bootstrap 官方文档长期建议的署名写法 (Twitter/Bootstrap 页脚做法)
+
+  "Icons from Glyphicons, licensed under CC BY 3.0."
+  (getbootstrap.com docs · twbs/bootstrap#3942)
+
+[说明 — 如实记录, 不补写许可证]
+  - Bootstrap v3 的代码许可为 MIT; Glyphicons 官方声明"与 Bootstrap 同许可"。
+  - 历史表述存在 Apache 2.0(Bootstrap v2 时代)与 MIT(v3 时代)差异, 已如实记录。
+  - "Glyphicons Free(CC BY 3.0)"指图片图标套装, 与随 Bootstrap 分发的
+    Halflings 字体为不同授权安排, 官方 issue 中长期存在讨论(#3942/#4485)。
+  - 哈希比对: 本地字体与 twbs/bootstrap@v3.4.1 发行文件 SHA256 一致
+    (核实详情: docs/核实报告-20261109.md §1.3)。

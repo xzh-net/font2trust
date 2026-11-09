@@ -1,0 +1,28 @@
+﻿# ============================================================
+# font2trust · 项目级过滤（配合仓库根 .gitignore）
+# ============================================================
+
+# ---- Python 编译产物（根级已覆盖，此处兜底）----
+__pycache__/
+*.py[cod]
+
+# ---- 内部私有配置（内网地址/凭证相关，严禁入库）----
+config/*.local.yaml
+
+# ---- 运行时数据（严禁提交）----
+# git 克隆缓存：其 .git/config 会写入带凭证的远程地址
+workspace/
+# 扫描报告 / 历史归档 / 运行日志（可由扫描重新生成）
+reports/
+# 字体证据目录（由 license_sources + 扫描结果重新生成）
+font-compliance/
+
+# ---- 测试基线数据（含内部仓库源码副本 + 扫描缓存，不入库）----
+# 重建方法见 README「测试基线重建」：执行一次正式运行后，
+# 复制 workspace/backend → tests/fixtures/repo_baseline（去掉 .git）
+# 复制 reports/current/scancode_*.json → tests/fixtures/scancode_baseline.json
+tests/fixtures/
+
+# ---- 本地安装产物 ----
+wheels/
+*.log

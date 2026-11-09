@@ -1,0 +1,54 @@
+# 合规字体白名单（草案）
+# 依据: docs/核实报告-20261109.md（三层证据法 + 官方发行文件哈希比对）
+# 状态: active（2026-11-09 技术部负责人确认签署，依据 docs/核实报告-20261109.md）
+# 生效方式(工程化 T5): active 条目在扫描中命中 -> 字体系列降级为 低危/已核实
+#
+# 匹配字段说明:
+#   font_family  字体系列名(与扫描报告 family 字段一致)
+#   version      字体版本(name 表 version 字段)
+#   license      核实后的许可证
+#   source       上游来源(仓库@标签 / 官方说明)
+#   sha256       已与官方发行文件比对一致的哈希(精确豁免, 可选)
+#   conditions   授权条件(必须落实)
+#   evidence     证据报告位置
+#   status       pending_review / active / revoked
+
+version: draft-20261109
+entries:
+
+  - font_family: FontAwesome
+    version: "4.7.0"
+    license: "SIL OFL 1.1 (字体) / MIT (CSS)"
+    source: "FortAwesome/Font-Awesome@4.7.0 (jsDelivr 官方标签)"
+    sha256: "AA58F33F239A0FB02F5C7A6C45C043D7A9AC9A093335806694ECD6D4EDC0D6A8"
+    conditions: "保留版权与许可证声明(OFL 要求); 保留 Font Awesome 署名"
+    evidence: "docs/核实报告-20261109.md#1-font-awesome-470--核实通过"
+    status: active
+
+  - font_family: Ionicons
+    version: "2.0.0 / 2.0.1"
+    license: "MIT (字体) / CC BY 4.0 (Google Material 衍生图标)"
+    source: "driftyco/ionicons@v2.0.1 (jsDelivr 官方标签)"
+    sha256: "2BA7F20B1D8990E17A47FE3D88E4C766628AAA2BAF1DD30FCA0A0DB59836F5F9"
+    conditions: "保留 MIT 声明; 界面/文档保留 Material Icons 署名(CC BY 4.0)"
+    evidence: "docs/核实报告-20261109.md#2-ionicons-v200--核实通过"
+    status: active
+
+  - font_family: GLYPHICONS Halflings
+    version: "1.009 (随 Bootstrap v3.4.1 发行)"
+    license: "随 Bootstrap 分发, 与 Bootstrap 同许可(官方声明); 建议按 CC BY 3.0 惯例署名"
+    source: "twbs/bootstrap@v3.4.1 (哈希一致) + glyphicons.com 官方声明"
+    sha256: "E395044093757D82AFCB138957D06A1EA9361BDCF0B442D06A18A8051AF57456"
+    conditions: "页脚保留 glyphicons.com 署名链接; 许可历史表述差异见核实报告 §1.3"
+    evidence: "docs/核实报告-20261109.md#3-glyphicons-halflings--有条件通过"
+    status: active
+
+# 后续追加示例(格式参考):
+#  - font_family: "..."
+#    version: "..."
+#    license: "..."
+#    source: "..."
+#    sha256: "..."        # 可选, 精确豁免用
+#    conditions: "..."
+#    evidence: "docs/核实报告-xxxx.md#..."
+#    status: active

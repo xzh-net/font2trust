@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>$title</title></head>
+<body style="margin:0;padding:24px;background:#f5f6f8;
+             font-family:'Microsoft YaHei',-apple-system,Segoe UI,sans-serif;color:#202124;">
+  <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:8px;
+              padding:24px 28px;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+    <h2 style="margin:0 0 4px;font-size:18px;color:#1a2b4a;">$title</h2>
+    <div style="font-size:13px;color:#80868b;margin-bottom:16px;">
+      生成时间：$gen_time ｜ 扫描仓库：$repos
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+      <tr>
+        <td style="padding:8px 0;color:#5f6368;">字体系列</td>
+        <td style="padding:8px 0;text-align:right;"><b>$a_series</b></td>
+        <td style="padding:8px 16px;color:#5f6368;">字体文件(去重)</td>
+        <td style="padding:8px 0;text-align:right;"><b>$a_files</b></td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#5f6368;">授权结论</td>
+        <td style="padding:8px 0;text-align:right;" colspan="3">$conclusions</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#5f6368;">风险等级</td>
+        <td style="padding:8px 0;text-align:right;" colspan="3">$risk_line</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#5f6368;">第三方组件(实例)</td>
+        <td style="padding:8px 0;text-align:right;"><b>$st_instances</b></td>
+        <td style="padding:8px 16px;color:#5f6368;">整改任务</td>
+        <td style="padding:8px 0;text-align:right;"><b>$task_count</b></td>
+      </tr>
+    </table>
+
+    <div style="margin-top:16px;padding:12px 14px;background:#e8f0fe;border-radius:6px;
+                font-size:13px;color:#1a3a6b;line-height:1.7;">
+      $note
+    </div>
+
+    <div style="margin-top:16px;font-size:12px;color:#80868b;line-height:1.7;">
+      完整报告见 <code>reports/current/report.html</code>（五区块）与
+      <code>字体授权台账.md</code>；证据原文见 <code>font-compliance/&lt;字体&gt;/</code>。<br>
+      ⚠️ 本邮件为自动化检测风险提示，<b>不构成侵权结论</b>；
+      「已确认允许/不允许」以技术部负责人审核签署为准。
+    </div>
+  </div>
+</body>
+</html>

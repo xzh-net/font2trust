@@ -1,0 +1,12 @@
+# 字体版权合规检测系统 · 依赖锁定（一期 · 纯 Python 工程）
+# 安装: pip install -r requirements.txt
+# 离线环境: pip download -r requirements.txt -d ./wheels 后离线安装
+# 注: scancode-toolkit 为可选重型组件，见 README「离线安装清单」
+
+fonttools==4.68.0      # 字体元数据解析(name表/OS-2 fsType)
+brotli==1.2.1          # WOFF2 解压
+PyYAML==6.0.2          # 配置加载
+Jinja2==3.1.6          # 报告模板
+
+# 可选（TP5 许可证扫描；缺失时自动跳过，不影响其他环节）
+# scancode-toolkit==32.5.0

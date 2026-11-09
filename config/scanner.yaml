@@ -1,0 +1,58 @@
+# 全局扫描配置
+# 说明: 敏感信息(GitLab token / SMTP 密码)一律通过环境变量注入, 此处只写环境变量名
+
+general:
+  workspace: workspace            # 仓库本地缓存目录(相对项目根)
+  reports_dir: reports            # 报告输出目录
+  log_level: INFO                 # DEBUG / INFO / WARNING / ERROR
+  scan_dependencies: false        # 是否扫描 node_modules 等依赖目录(噪音大, 默认关闭)
+
+# 需要扫描的字体文件扩展名
+font_extensions:
+  - .ttf
+  - .otf
+  - .ttc
+  - .woff
+  - .woff2
+  - .eot
+
+# 目录排除规则(依赖目录 scan_dependencies=false 时额外生效)
+# 注意: 默认只排 node_modules/vendor —— **不排 dist/build**:
+#   第三方框架的 dist(如 adminlte/dist)内含字体引用与许可证线索,
+#   属合规检测对象; 若项目自有构建产物需跳过, 请在此处显式追加。
+exclude_dirs:
+  - .git
+  - .svn
+  - __pycache__
+  - .venv
+  - venv
+  - .idea
+  - .vscode
+exclude_dirs_when_deps_off:
+  - node_modules
+  - vendor
+
+# 仓库同步(gitlab 信息后续提供, 当前占位)
+git:
+  enabled: true
+  timeout: 600                    # 单仓库同步超时(秒)
+  # GITLAB_TOKEN 环境变量名, 用于 private 仓库与 API 自动发现
+  token_env: GITLAB_TOKEN
+
+# ScanCode Toolkit 许可证扫描(可选组件: 未安装则自动跳过)
+scancode:
+  enabled: true
+  executable: scancode            # 可执行文件名或绝对路径, 也可用环境变量 SCANCODE_PATH
+  processes: 4
+  timeout: 1800                   # 单仓库扫描超时(秒)
+  min_score: 0                    # 许可证匹配置信度 0-100
+
+# 历史记录
+history:
+  db_path: reports/history/scanner.db   # sqlite 历史库
+  keep_runs: 52                          # 保留最近 N 次扫描记录(约一年)
+
+# 报告
+report:
+  title: 代码字体版权合规检测报告
+  show_disclaimer: true           # 报告页脚展示"非侵权结论"免责声明
