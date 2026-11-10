@@ -31,6 +31,23 @@ def _mask(url: str) -> str:
     return re.sub(r"//([^/@]+)@", "//***@", url or "")
 
 
+def _auth_args(url: str, token: str | None) -> list[str]:
+    """克隆/拉取的认证参数（P1c: token 不写入 .git/config）。
+
+    实测(2026-11-10): GitLab git-over-HTTP 接受 Basic, **拒绝 Bearer**;
+    URL 内嵌 userinfo 虽可用但会把 token 明文写进每个克隆的 .git/config
+    (实测 3/3 仓库命中) → 有 token 且 URL 无凭证时改用 http.extraHeader。
+    """
+    if not token:
+        return []
+    hostpart = (url or "").split("://", 1)[-1].split("/", 1)[0]
+    if "@" in hostpart:          # URL 已带凭证(manual 模式), 不重复注入
+        return []
+    import base64
+    b64 = base64.b64encode(f"oauth2:{token}".encode()).decode()
+    return ["-c", f"http.extraHeader=Authorization: Basic {b64}"]
+
+
 def _rmtree_robust(path: Path, retries: int = 3) -> bool:
     """删除目录树: Windows 只读文件(如 .git/objects)先清属性再重试。"""
     import time
@@ -55,10 +72,12 @@ def _rmtree_robust(path: Path, retries: int = 3) -> bool:
 
 
 def sync_repo(name: str, url: str, dest: Path, local_mode: bool = False,
-              timeout: int = 600) -> dict:
+              timeout: int = 600, token: str | None = None) -> dict:
     """clone/pull 远端仓库；local 模式直接使用已有目录。
 
     - URL 后缀 `#branch` 指定分支（如 ...repo.git#develop）
+    - token: 传入时用 http.extraHeader 注入 Basic 认证（不落 .git/config），
+             URL 自带凭证时不重复注入
     - **配置变更感知(缺陷修复)**: 修改 projects.yaml 后
         * 仓库切换(去凭证后 URL 不同) -> 删除缓存重建 clone
         * 仅凭证变化 -> git remote set-url 更新
@@ -69,6 +88,7 @@ def sync_repo(name: str, url: str, dest: Path, local_mode: bool = False,
     branch = None
     if not local_mode and "#" in url:
         url, branch = url.rsplit("#", 1)
+    auth = _auth_args(url, token)
 
     if local_mode:
         p = Path(url)
@@ -77,7 +97,7 @@ def sync_repo(name: str, url: str, dest: Path, local_mode: bool = False,
         return {"name": name, "path": str(p), "ok": True, "mode": "local"}
 
     def _clone() -> dict:
-        cmd = ["git", "clone", "--depth", "1"]
+        cmd = ["git", *auth, "clone", "--depth", "1"]
         if branch:
             cmd += ["--branch", branch]
         cmd += [url, str(dest)]
@@ -133,7 +153,7 @@ def sync_repo(name: str, url: str, dest: Path, local_mode: bool = False,
                     return _reclone(f"分支变更 {cur} -> {branch}")
         # 4) 拉取
         try:
-            subprocess.run(["git", "-C", str(dest), "pull", "--ff-only"],
+            subprocess.run(["git", *auth, "-C", str(dest), "pull", "--ff-only"],
                            check=True, capture_output=True, timeout=min(timeout, 300))
             return {"name": name, "path": str(dest), "ok": True, "mode": "pull"}
         except Exception as e:  # noqa: BLE001 降级继续

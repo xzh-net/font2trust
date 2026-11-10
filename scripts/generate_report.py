@@ -276,11 +276,64 @@ def _norm(s) -> str:
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
+def plan_block(plan: dict | None) -> dict:
+    """00｜扫描任务清单 区块字段（P1b: 覆盖可自证）。
+
+    plan 由 main 传入; 缺省时给占位值(旧版/单测调用不传也不会报错)。
+    """
+    if not plan:
+        return {"p_planned": "-", "p_scanned": "-", "p_failed": "-",
+                "p_skipped": "-", "p_mode": "-", "p_scope": "-",
+                "p_note": "本次调用未提供扫描任务清单。",
+                "p_plan_rows": '<tr><td colspan="3" class="muted">无清单</td></tr>'}
+    c = plan.get("counts", {})
+    scanned = {s.get("name"): s for s in plan.get("scanned", [])}
+    failed = {f.get("name"): f for f in plan.get("failed", [])}
+    rows = []
+    for p in plan.get("planned", []):
+        n = p.get("name", "?")
+        if n in scanned:
+            s = scanned[n]
+            state, detail = "✅ 成功", (f"文件 {s.get('files')} · 字体系列 "
+                                       f"{s.get('series')} · 字体文件 "
+                                       f"{s.get('fonts')}")
+        elif n in failed:
+            f = failed[n]
+            state = "❌ 失败"
+            detail = f"[{f.get('stage')}] {f.get('error')}"
+        else:
+            state, detail = "⏭ 未执行", "—"
+        rows.append(f"<tr><td>{esc(n)}</td><td>{state}</td>"
+                    f"<td>{esc(str(detail))}</td></tr>")
+    for s in plan.get("skipped", []):
+        rows.append(f"<tr><td>{esc(str(s.get('path')))}</td><td>⏭ 过滤</td>"
+                    f"<td>{esc(str(s.get('reason')))}</td></tr>")
+    note_parts = []
+    if plan.get("host"):
+        note_parts.append(f"发现来源: {esc(str(plan['host']))}"
+                          f"（口径 {esc(str(plan.get('scope') or '-'))}）")
+    if plan.get("fallback_reason"):
+        note_parts.append(f"⚠️ 使用上次发现清单，原因: "
+                          f"{esc(str(plan['fallback_reason']))}")
+    note_parts.append("本区块用于证明扫描覆盖：计划数与成功/失败/过滤逐条可核对。")
+    return {
+        "p_planned": c.get("planned", 0), "p_scanned": c.get("scanned", 0),
+        "p_failed": c.get("failed", 0), "p_skipped": c.get("skipped", 0),
+        "p_mode": esc(str(plan.get("mode") or "-")),
+        "p_scope": esc(str(plan.get("scope") or "-")),
+        "p_note": " ｜ ".join(note_parts),
+        "p_plan_rows": "\n".join(rows)
+                        or '<tr><td colspan="3" class="muted">无计划项</td></tr>',
+    }
+
+
 def generate_report(result, out_dir: Path,
-                    templates_dir: Path | None = None) -> tuple[Path, Path]:
+                    templates_dir: Path | None = None,
+                    plan: dict | None = None) -> tuple[Path, Path]:
     """生成 report.html + report.json。
 
     result: 单个扫描结果 dict（poc_report 结构）或其列表（多仓库）。
+    plan:   扫描任务清单（计划/成功/失败/过滤），渲染 00 区块。
     返回 (html_path, json_path)。
     """
     reports = result if isinstance(result, list) else [result]
@@ -403,6 +456,7 @@ def generate_report(result, out_dir: Path,
         kw_count=rules_cfg.get("commercial_keyword_count", len(kw)),
         kw_hits=sum(1 for s in series_all if s.get("commercial_hits")),
         kw_list=esc("、".join(kw)),
+        **plan_block(plan),
     )
 
     out_dir = Path(out_dir)

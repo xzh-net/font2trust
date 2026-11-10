@@ -4,8 +4,12 @@
 general:
   workspace: workspace            # 仓库本地缓存目录(相对项目根)
   reports_dir: reports            # 报告输出目录
+  evidence_dir: font-compliance   # 字体证据目录(相对项目根; 测试/隔离运行可改指临时区)
   log_level: INFO                 # DEBUG / INFO / WARNING / ERROR
   scan_dependencies: false        # 是否扫描 node_modules 等依赖目录(噪音大, 默认关闭)
+  repo_concurrency: 2             # 仓库级并发(P1c): 2=本机 8C16T 实测可用;
+                                  #   注意 ScanCode 每仓 processes 个进程,
+                                  #   内存紧张或 OOM 时改回 1
 
 # 需要扫描的字体文件扩展名
 font_extensions:
@@ -18,8 +22,11 @@ font_extensions:
 
 # 目录排除规则(依赖目录 scan_dependencies=false 时额外生效)
 # 注意: 默认只排 node_modules/vendor —— **不排 dist/build**:
-#   第三方框架的 dist(如 adminlte/dist)内含字体引用与许可证线索,
-#   属合规检测对象; 若项目自有构建产物需跳过, 请在此处显式追加。
+#   第三方框架的 dist(如 adminlte/dist、wxcomponents/vant/dist)内含字体引用与
+#   许可证线索, 属合规检测对象; 若项目自有构建产物需跳过, 请在此处显式追加。
+# unpackage = uni-app 构建缓存(纯生成物, 内容是 static/ 的副本) —— 实测
+#   慧丰收web 1391 文件中 981(71%) 为 unpackage+dist, 其中 unpackage 442 个
+#   全是产物副本; 排除后该仓 ScanCode 167s -> 114s, 不损失任何合规证据。
 exclude_dirs:
   - .git
   - .svn
@@ -28,6 +35,7 @@ exclude_dirs:
   - venv
   - .idea
   - .vscode
+  - unpackage
 exclude_dirs_when_deps_off:
   - node_modules
   - vendor
@@ -47,9 +55,8 @@ scancode:
   timeout: 1800                   # 单仓库扫描超时(秒)
   min_score: 0                    # 许可证匹配置信度 0-100
 
-# 历史记录
+# 历史记录（2026-11-09 决策: 撤销 sqlite, 改为文件级归档, 见 §6.3）
 history:
-  db_path: reports/history/scanner.db   # sqlite 历史库
   keep_runs: 52                          # 保留最近 N 次扫描记录(约一年)
 
 # 报告

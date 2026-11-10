@@ -41,18 +41,21 @@ def main() -> int:
             reports = tdp / "reports"
             current = reports / "current"
             current.mkdir(parents=True)
-            # 预置扫描缓存(避免冒烟时全量重扫)
-            shutil.copy2(CACHE, current / "scancode_backend.json")
+            # 预置扫描缓存(避免冒烟时全量重扫)——文件名须与仓库名一致:
+            # local 模式目标名取目录名(fixture=repo_baseline), 写成 scancode_backend
+            # 会导致缓存永远命中不了 -> 每次冒烟都跑全量 ScanCode(实测 439s)
+            shutil.copy2(CACHE, current / f"scancode_{repo.name}.json")
 
-            # 测试配置: 报告目录指向临时区 + local 模式
+            # 测试配置: 报告/证据目录全部指向临时区(修复: 测试污染正式产物 P1-3)
             cfg_yaml = tdp / "scanner.yaml"
             cfg_yaml.write_text(
-                "general: {workspace: workspace, reports_dir: %s, log_level: INFO}\n"
+                "general: {workspace: workspace, reports_dir: %s, "
+                "evidence_dir: %s, log_level: INFO}\n"
                 "font_extensions: [.ttf, .otf, .ttc, .woff, .woff2, .eot]\n"
                 "exclude_dirs: [.git, .svn, __pycache__, .venv, venv, .idea, .vscode]\n"
                 "exclude_dirs_when_deps_off: [node_modules, vendor]\n"
                 "scancode: {timeout: 1800}\nhistory: {keep_runs: 52}\n"
-                % str(reports), encoding="utf-8")
+                % (str(reports), str(tdp / "font-compliance")), encoding="utf-8")
             proj_yaml = tdp / "projects.yaml"
             proj_yaml.write_text(
                 "mode: local\nlocal_paths: [%s]\nprojects: []\n"
@@ -60,6 +63,15 @@ def main() -> int:
 
             argv = ["--config", str(cfg_yaml), "--projects", str(proj_yaml),
                     "--reuse-scancode"]
+
+            # 污染守卫: 正式 font-compliance/ 在测试前后必须完全不变 (P1-3)
+            real_evid = PROJECT_ROOT / "font-compliance"
+
+            def _snap():
+                return {str(p): p.stat().st_mtime for p in real_evid.rglob("*")
+                        if p.is_file()} if real_evid.exists() else {}
+
+            before = _snap()
 
             # ---- 第一次运行 ----
             rc = run_pipeline(list(argv))
@@ -75,10 +87,15 @@ def main() -> int:
             batches = sorted(p for p in (reports / "history").iterdir()
                              if p.is_dir())
             assert len(batches) == 1 and (batches[0] / "report.json").exists()
-            evid = list((PROJECT_ROOT / "font-compliance").rglob("LICENSE.txt"))
-            assert len(evid) >= 3, f"证据目录缺失: {len(evid)}"
+            evid = list((tdp / "font-compliance").rglob("LICENSE.txt"))
+            assert len(evid) >= 1, f"证据目录缺失: {len(evid)}"
+            # 凭证兜底: 任何落盘产物不得含 URL 凭证/gitlab token (P0-2)
+            from scripts.utils import redact_credentials
+            for p in (current / "report.json", current / "report.html"):
+                _, hits = redact_credentials(p.read_text(encoding="utf-8"))
+                assert hits == 0, f"{p.name} 含凭证 {hits} 处"
             print(f"1) 第一次运行: 报告/台账/邮件预览/归档({batches[0].name})/"
-                  f"证据 全部就位 ✅")
+                  f"证据({len(evid)}) 全部就位, 产物无凭证 ✅")
 
             # ---- 第二次运行: 文件级环比必须生效 ----
             rc2 = run_pipeline(list(argv))
@@ -103,6 +120,10 @@ def main() -> int:
                 print(f"3) 结论基线(POC fixture): {conclusions} ✅")
             else:
                 print(f"3) 结论一致性: {len(conclusions)} 系列全部合法取值 ✅")
+
+            # 污染守卫收口: 两次运行后正式证据目录必须与测试前逐字节一致
+            assert _snap() == before, "测试污染了正式 font-compliance/ 目录"
+            print("4) 隔离校验: 正式 font-compliance/ 未被测试改动 ✅")
         finally:
             # 无论成败都释放日志句柄(防临时目录锁, Windows)——须在 with 内,
             # 否则临时目录清理先于句柄关闭执行

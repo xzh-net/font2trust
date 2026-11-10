@@ -89,6 +89,23 @@
 </header>
 <div class="wrap">
 
+  <h2>00｜扫描任务清单（覆盖自证）</h2>
+  <div class="statbar">
+    <span>计划 <b>$p_planned</b></span>
+    <span>成功 <b>$p_scanned</b></span>
+    <span>失败 <b>$p_failed</b></span>
+    <span>过滤 <b>$p_skipped</b></span>
+    <span>模式 <b>$p_mode</b></span>
+    <span>范围 <b>$p_scope</b></span>
+  </div>
+  <div class="note">$p_note</div>
+  <table>
+    <thead><tr><th>仓库 / 项目</th><th>状态</th><th>说明</th></tr></thead>
+    <tbody>
+$p_plan_rows
+    </tbody>
+  </table>
+
   <h2>01｜字体使用总览</h2>
   <div class="statbar">
     <span>字体系列 <b>$a_series</b></span>

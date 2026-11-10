@@ -10,17 +10,40 @@
 # 模式:
 #   manual - 显式列出仓库 URL（支持 ${ENV:-默认值} 插值与 URL 后缀 #分支）
 #   local  - 只扫描本地目录（不执行 git），适合离线/冒烟
-#   auto   - GitLab API 自动发现（二期）
+#   auto   - GitLab API 自动发现（P1a 已实现）: 见下方 auto 段
+#
+# ── auto 模式（发现范围 = 组 + 子组，实测两种口径结果一致）──────────────
+# 启用: 把 mode 改为 auto，并提供环境变量:
+#   export GITLAB_HOST=http://<你的-gitlab>      # 或在 auto.host 写死
+#   export GITLAB_TOKEN=xxxx                     # 只读: read_api + read_repository
+# 验证清单(不扫描):  python -m scripts.main --projects <清单> --discover-only
+# 完整运行(全量):    python -m scripts.main --projects <清单>
+#   本机实测参考: 35 个项目、约 2 小时(串行) → 已配 repo_concurrency=2 与
+#   unpackage 排除; 发现失败会**显式报错**, 不会静默退回手工清单。
+auto:
+  host: ${GITLAB_HOST:-http://your-gitlab.example.com}
+  token_env: GITLAB_TOKEN        # token 只走环境变量, 不落盘
+  groups: []                     # 组 full_path 或数字 id; include_subgroups 生效
+                                 # 例: [huier, huier_marketing] (实测覆盖 14 组 35 项目)
+                                 # 留空 = 回退 membership(token 可见的全部项目)
+  include_subgroups: true
+  archived: false                # 不扫已归档项目
+  last_activity_within_days: null  # null=不过滤(首跑建议全量); 365=跳过一年未动
+  ref: default                   # default=用项目默认分支; 或写死 master/main
+  refs: {}                       # 按 path_with_namespace 覆盖分支
+                                 # 例: {huier/x/frontend/foo: uat}
+  exclude: []                    # 按 path_with_namespace 排除
+  include: []                    # 白名单: 非空时只扫这些项目(分批上线试点用)
 
 mode: manual
 
 projects:
-  - name: backend
+  - name: admin-web
     url: http://oauth2:${GITLAB_TOKEN:-placeholder}@127.0.0.1:80/your-group/your-backend.git#develop
     enabled: true                # 改为你的扫描目标
 
-  - name: frontend
-    url: http://oauth2:${GITLAB_TOKEN:-placeholder}@127.0.0.1:80/your-group/your-frontend.git
+  - name: admin-wx
+    url: http://oauth2:${GITLAB_TOKEN:-placeholder}@127.0.0.1:80/your-group/your-frontend.git#main
     enabled: false
 
 # local 模式扫描目录（mode: local 时生效）
