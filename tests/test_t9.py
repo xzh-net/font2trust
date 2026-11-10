@@ -47,24 +47,30 @@ def _rep(conclusion: str, level: str = "low") -> dict:
 
 def main() -> int:
     # 1) 邮件占位: enabled=false 渲染预览, 不联网
+    #    预览写入临时目录(修复: 测试不得污染 reports/current, P1-3)
     cfg = {"enabled": False, "recipients": ["x@example.com"],
            "password_env": "SMTP_PASSWORD"}
-    res = send_email(SUMMARY, None, cfg)
-    assert res["status"] == "disabled", res
-    preview = Path(res["path"])
-    assert preview.exists()
-    html = preview.read_text(encoding="utf-8")
-    assert "已确认允许: <b>3</b>" in html, "结论未填入"
-    assert "不构成侵权结论" in html, "免责声明缺失"
-    assert "task_count" not in html and "$" not in html.replace("$title", "") or True
-    for ph in ("$conclusions", "$risk_line", "$a_series", "$note"):
-        assert ph not in html, f"占位符残留: {ph}"
-    print(f"1) 邮件占位: 预览已渲染({preview.name}), 无占位符, 免责声明在位 ✅")
+    with tempfile.TemporaryDirectory() as td:
+        preview_in = Path(td) / "email_preview.html"
+        res = send_email(SUMMARY, None, cfg, preview_path=preview_in)
+        assert res["status"] == "disabled", res
+        preview = Path(res["path"])
+        assert preview == preview_in, f"预览未写入指定位置: {preview}"
+        assert preview.exists()
+        html = preview.read_text(encoding="utf-8")
+        assert "已确认允许: <b>3</b>" in html, "结论未填入"
+        assert "不构成侵权结论" in html, "免责声明缺失"
+        assert "task_count" not in html and "$" not in html.replace("$title", "") or True
+        for ph in ("$conclusions", "$risk_line", "$a_series", "$note"):
+            assert ph not in html, f"占位符残留: {ph}"
+        print(f"1) 邮件占位: 预览已渲染({preview.name}), 无占位符, "
+              f"免责声明在位, 未污染 reports/current ✅")
 
-    # 2) enabled=true 但无密码环境变量 → 失败且不联网
-    res2 = send_email(SUMMARY, None, dict(cfg, enabled=True))
-    assert res2["status"] == "failed" and "SMTP_PASSWORD" in res2["error"], res2
-    print(f"2) enabled=true 无密码: 安全失败(不联网) ✅ -> {res2['error']}")
+        # 2) enabled=true 但无密码环境变量 → 失败且不联网
+        res2 = send_email(SUMMARY, None, dict(cfg, enabled=True),
+                          preview_path=preview_in)
+        assert res2["status"] == "failed" and "SMTP_PASSWORD" in res2["error"], res2
+        print(f"2) enabled=true 无密码: 安全失败(不联网) ✅ -> {res2['error']}")
 
     # 3) 文件级环比: 签署前 -> 签署后 结论翻转
     with tempfile.TemporaryDirectory() as td:

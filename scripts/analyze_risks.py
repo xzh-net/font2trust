@@ -24,7 +24,11 @@ import yaml
 log = logging.getLogger("font_compliance")
 
 # 第三方组件目录标记（注意: 不含 external —— 常见 Java 包名段, 会误判自有代码）
-THIRD_PARTY_MARKERS = ("bower_components", "node_modules", "vendor", "third_party")
+# uni_modules = uni-app 插件目录(等同前端 node_modules 生态)。2026-11-10 修复(P1-4):
+#   缺失时该目录内字体被判"来源不明→高危"，实际来源可从路径直接推导。
+# 可在 config/license_rules.yaml 用 third_party_markers 追加更多目录(不覆盖内置)。
+THIRD_PARTY_MARKERS = ("bower_components", "node_modules", "vendor",
+                       "third_party", "uni_modules")
 REPO_LICENSE_RE = re.compile(
     r"^(LICENSE|LICENCE|COPYING|OFL|NOTICE)(\.(\w+))?$", re.I)
 LOCKFILES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml",
@@ -43,11 +47,19 @@ REVIEW_STATUS = {"pending": "待确认", "evaluating": "待评估",
 
 
 def load_rules(path: str | Path) -> dict:
-    """加载 config/license_rules.yaml: 词库 + 许可证分类（引擎运行依赖）。"""
+    """加载 config/license_rules.yaml: 词库 + 许可证分类（引擎运行依赖）。
+
+    可选键 third_party_markers: 追加第三方目录标记（配置驱动, 不覆盖内置）。
+    """
+    global THIRD_PARTY_MARKERS
     p = Path(path)
     data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     keywords = [a.strip() for a in
                 (data.get("commercial_keywords") or "").split("|") if a.strip()]
+    extra = [str(m).strip() for m in (data.get("third_party_markers") or [])
+             if str(m).strip()]
+    if extra:
+        THIRD_PARTY_MARKERS = tuple(dict.fromkeys(THIRD_PARTY_MARKERS + tuple(extra)))
     return {
         "commercial_keywords": keywords,
         "open_spdx": set(data.get("open_spdx") or []),
@@ -66,6 +78,19 @@ def load_whitelist(path: str | Path) -> list[dict]:
         log.warning("白名单解析失败: %s", e)
         return []
     return [e for e in (data.get("entries") or []) if e.get("status") == "active"]
+
+
+def load_whitelist_all(path: str | Path) -> list[dict]:
+    """加载全部白名单条目(含 pending_review/revoked)，供证据目录展示登记状态。"""
+    p = Path(path)
+    if not p.exists():
+        return []
+    try:
+        data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception as e:  # noqa: BLE001
+        log.warning("白名单解析失败: %s", e)
+        return []
+    return list(data.get("entries") or [])
 
 
 # ---------------------------------------------------------------- 许可证识别
@@ -120,6 +145,55 @@ def max_level(a: str, b: str) -> str:
 
 def norm_name(s: str | None) -> str:
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+# 尾部字重/样式词（白名单登记名常省略, 如 "...Halflings" vs "...Halflings Regular"）
+# 注意: **不含** sc/mono —— SC=简体中文区域后缀(Noto Sans SC)、Mono=独立子族,
+#       剥离会把不同字体误判为同族(白名单误放行方向, T14 §3 实测抓出)。
+_STYLE_SUFFIX_RE = re.compile(
+    r"(regular|bold|italic|light|medium|thin|semibold|extrabold|black|"
+    r"condensed|oblique|book|roman)$")
+
+
+def norm_name_loose(s: str | None) -> str:
+    """名称归一化（宽松）: 归一化 + 剥离尾部样式词（结果过短则不剥）。
+
+    P1-5 缺陷修复: 白名单按精确名匹配时, 带 "Regular" 等后缀的系列名
+    匹配不上已签署条目, 结论会静默从"已确认允许"回退。
+    """
+    n = norm_name(s)
+    while len(n) > 6:
+        m = _STYLE_SUFFIX_RE.search(n)
+        if not m:
+            break
+        stripped = n[: m.start()]
+        if len(stripped) < 6:
+            break
+        n = stripped
+    return n
+
+
+def whitelist_name_match(entry_family: str | None, family: str | None) -> bool:
+    """白名单条目名与扫描系列名是否匹配（精确 或 宽松等价）。"""
+    a, b = norm_name(entry_family), norm_name(family)
+    if not a or not b:
+        return False
+    return a == b or norm_name_loose(entry_family) == norm_name_loose(family)
+
+
+def find_whitelist_entry(family: str | None, files: list,
+                         whitelist: list | None) -> dict | None:
+    """命中白名单条目: 名称匹配(精确/宽松) 或 sha256 精确豁免, 按登记顺序取首个。
+
+    files: 字体系列的文件条目(含 sha256)。whitelist 应为 status=active 条目。
+    """
+    for e in whitelist or []:
+        if whitelist_name_match(e.get("font_family"), family):
+            return e
+        sha = (e.get("sha256") or "").lower()
+        if sha and any((f.get("sha256") or "").lower() == sha for f in files):
+            return e
+    return None
 
 
 def perm_and_limit(spdix_or_expr: str | None) -> tuple[str, str]:
@@ -319,15 +393,8 @@ def assess_family(g: dict, ctx: dict) -> dict:
         f.get("license_text") or "" for f in parseable)).lower()
     commercial_hits = [kw for kw in rules.get("commercial_keywords", [])
                        if kw.lower() in fam_blob]
-    # 证据7: 白名单（人工核实登记）
-    wl = None
-    for e in ctx.get("whitelist", []):
-        if (norm_name(e.get("font_family")) == norm_name(g["family"])
-                or any((f.get("sha256") or "").lower()
-                       == (e.get("sha256") or "").lower() and e.get("sha256")
-                       for f in files)):
-            wl = e
-            break
+    # 证据7: 白名单（人工核实登记；名称宽松匹配 + sha256 精确豁免, P1-5）
+    wl = find_whitelist_entry(g["family"], files, ctx.get("whitelist"))
 
     # ---- 许可证状态与基础风险（仅字体文件自身证据） ----
     font_basis = bool(lic_text or lic_url or license_expression)
@@ -359,10 +426,23 @@ def assess_family(g: dict, ctx: dict) -> dict:
                                   "字体授权需单独核实")
                 rules_hit.append("component_license_not_inherited")
         else:
-            level = "high"
-            rules_hit.append("source_unknown_no_auth")
-            evidence.append("许可证字段为空, 且无法从路径推导来源组件, "
-                            "无法提供授权依据")
+            # P1-4: "来源不明"须同时无路径线索**且**无版权声明线索;
+            # 有版权声明=可追溯来源, 降为中危待评估, 不产生"暂停发布"级告警
+            cps = sorted({(f.get("copyright") or "").strip() for f in files
+                          if (f.get("copyright") or "").strip()})
+            if cps:
+                level = "medium"
+                rules_hit.append("source_clue_no_auth")
+                evidence.append(
+                    "许可证字段为空, 且无法从路径推导来源组件; 但存在版权声明线索: "
+                    + "; ".join(c[:80] for c in cps[:2])
+                    + " —— 可据此追溯来源(图标平台导出记录/上游发行包), "
+                      "补齐授权依据前不得视为已授权")
+            else:
+                level = "high"
+                rules_hit.append("source_unknown_no_auth")
+                evidence.append("许可证字段为空, 且无法从路径推导来源组件"
+                                "、无任何版权声明线索, 无法提供授权依据")
         if not parseable:
             rules_hit.append("unparsable")
             exts = ",".join(sorted({f["ext"] for f in unparsable}))
@@ -484,6 +564,8 @@ def assess_family(g: dict, ctx: dict) -> dict:
         suggestion = "记录许可证线索与来源, 待人工核对后归档"
     else:
         suggestion = "仅记录, 无需处理"
+    if "source_clue_no_auth" in rules_hit:
+        suggestion += "; 有版权声明线索, 可先据此追溯来源再决定是否替换"
 
     versions = sorted({f["font_version"] for f in files if f.get("font_version")})
     out = {k: v for k, v in g.items() if not k.startswith("_")}

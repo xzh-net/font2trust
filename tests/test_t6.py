@@ -19,8 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))   # 复用 test_t5 构�
 from test_t5 import build_ctx                               # noqa: E402
 
 from scripts.analyze_risks import (assess_family, group_fonts,  # noqa: E402
-                                   load_rules, load_whitelist)
-from scripts.evidence import build_evidence                 # noqa: E402
+                                   load_rules, load_whitelist,
+                                   load_whitelist_all)
+from scripts.evidence import VERIFY_DATE, build_evidence         # noqa: E402
 from scripts.ledger import write_ledger                     # noqa: E402
 from scripts.utils import load_config                       # noqa: E402
 
@@ -48,12 +49,11 @@ def main() -> int:
     assert "已确认允许" in text and "白名单已登记" in text
     print(f"1) 台账: 15 字段 × 3 系列 + 12 文件明细; 结论/登记信息在位 ✅")
 
-    # 2) 证据目录（写到临时目录验证内容, 正式目录由流水线生成）
-    import scripts.evidence as ev
-    old_root = ev.EVID_ROOT
+    # 2) 证据目录（注入临时根目录, 不写正式 font-compliance/, 修复 P1-3）
+    wl_all = load_whitelist_all("config/whitelist.yaml")
     with tempfile.TemporaryDirectory() as td:
-        ev.EVID_ROOT = Path(td)
-        made = build_evidence(series, "backend")
+        made = build_evidence(series, "backend", evid_root=Path(td),
+                              whitelist_all=wl_all)
         assert len(made) == 3, made
         files = [p for p in Path(td).rglob("*") if p.is_file()]
         assert len(files) == 12, f"证据文件应 12, 实际 {len(files)}"
@@ -68,19 +68,25 @@ def main() -> int:
         assert "active（已确认允许）" in rr and "三层证据法" in rr
         si = (Path(td) / "FontAwesome" / "source-info.txt").read_text(encoding="utf-8")
         assert "MATCH" in si and "4.7.0" in si
-    ev.EVID_ROOT = old_root
+        # 未登记字体: 状态如实为"未登记", 不再误报 pending_review(待签署)
+        rr_unknown = (Path(td) / "GLYPHICONS-Halflings-Regular" /
+                      "review-record.md").read_text(encoding="utf-8")
+        assert "pending_review" not in rr_unknown, "未登记字体不得显示待签署"
     print("2) 证据目录: 3×4 文件; OFL/MIT/CC-BY/官方声明 原文归档; 签署栏在位 ✅")
 
     # 3) 未归档字体 -> "证据未找到"分支（不补写许可证）
     with tempfile.TemporaryDirectory() as td:
-        ev.EVID_ROOT = Path(td)
-        fake = [dict(series[0], family="UnknownFace",
+        fake_files = [dict(f, sha256="0" * 64) for f in series[0]["files"]]
+        fake = [dict(series[0], family="UnknownFace", files=fake_files,
                      evidence_dir="font-compliance/UnknownFace/")]
-        build_evidence(fake, "backend")
+        build_evidence(fake, "backend", evid_root=Path(td),
+                       whitelist_all=wl_all)
         lic = (Path(td) / "UnknownFace" / "LICENSE.txt").read_text(encoding="utf-8")
         assert "证据未找到" in lic and "不自行补写许可证" in lic, lic[:200]
-    ev.EVID_ROOT = old_root
-    print("3) 未归档字体: 走『证据未找到』分支, 不补写 ✅")
+        rr = (Path(td) / "UnknownFace" / "review-record.md").read_text(encoding="utf-8")
+        assert "未登记" in rr and "未执行哈希比对" in rr, rr[:400]
+        assert VERIFY_DATE not in rr, "未核实字体不得声称已执行三层证据法"
+    print("3) 未归档字体: 走『证据未找到』分支, 不补写; 状态如实✅")
 
     print("\nT6 ACCEPT: PASS")
     return 0

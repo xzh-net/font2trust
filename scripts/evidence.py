@@ -16,10 +16,13 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
+from .analyze_risks import find_whitelist_entry
 from .utils import PROJECT_ROOT
 
 SRC = PROJECT_ROOT / "license_sources"
 EVID_ROOT = PROJECT_ROOT / "font-compliance"
+# 三层证据法的实际执行日期(哈希比对/上游标签, 核实报告 docs/核实报告-20261109.md)
+VERIFY_DATE = "2026-11-09"
 
 # 哈希比对结论（核实归档, 2026-11-09 三层证据法执行结果）
 HASH_VERIFY = {
@@ -71,15 +74,32 @@ def _read_src(name: str) -> str:
     return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
 
 
-def build_evidence(series: list, repo_name: str) -> list[str]:
-    """生成各字体证据目录，返回生成路径列表。"""
+def build_evidence(series: list, repo_name: str,
+                   evid_root: Path | None = None,
+                   whitelist_all: list | None = None) -> list[str]:
+    """生成各字体证据目录，返回生成路径列表。
+
+    evid_root: 输出根目录（默认 font-compliance/；测试/隔离运行可注入,
+               修复"测试覆写正式证据目录"缺陷 P1-3）。
+    whitelist_all: 全量白名单条目(含 pending_review)，用于如实展示登记状态。
+    """
+    root = Path(evid_root) if evid_root else EVID_ROOT
+    today = f"{dt.date.today():%Y-%m-%d}"
     made: list[str] = []
     for s in series:
         k = key_of(s["family"])
+        verified = k != "other"          # 有随包归档的上游证据(三层证据法已执行)
+        wl = find_whitelist_entry(s["family"], s.get("files") or [],
+                                  whitelist_all or [])
+        wl_status = (wl or {}).get("status")
+        wl_text = {"active": "active（已确认允许）",
+                   "pending_review": "pending_review（待负责人签署转 active）",
+                   "revoked": "revoked（已撤销, 需重新核实）"}.get(
+                       wl_status, "未登记（需先核实并登记 whitelist.yaml）")
         rel = (s.get("evidence_dir") or "").replace("\\", "/").strip("/")
         if rel.startswith("font-compliance/"):
             rel = rel[len("font-compliance/"):]
-        d = EVID_ROOT / (rel or s["family"])
+        d = root / (rel or s["family"])
         d.mkdir(parents=True, exist_ok=True)
         up = UPSTREAM.get(k, ("未知", "未知", ""))
 
@@ -111,7 +131,10 @@ def build_evidence(series: list, repo_name: str) -> list[str]:
             "本地版权: " + ("; ".join(sorted(
                 {(f.get('copyright') or '')[:80] for f in s['files']
                  if f.get('copyright')})) or "未记录"),
-            "", "来源核实详情见 docs/核实报告-20261109.md",
+            "",
+            (f"来源核实详情见 docs/核实报告-{VERIFY_DATE.replace('-', '')}.md"
+             if verified else
+             "来源核实: 未执行(无归档上游证据); 待追溯上游发行包后补做三层证据法"),
         ]
         (d / "source-info.txt").write_text("\n".join(si), encoding="utf-8")
 
@@ -135,34 +158,48 @@ def build_evidence(series: list, repo_name: str) -> list[str]:
                          + _read_src("CC-BY-4.0.txt"))
         head = (f"# 许可证原文/官方授权声明 — {s['family']}\n"
                 f"# 适用对象: {subject}\n"
-                f"# 来源: {up[2] or '官方声明页'} (获取日期 2026-11-09)\n"
+                f"# 来源: {up[2] or '未找到(无归档上游地址)'} "
+                f"(原文获取 {VERIFY_DATE if verified else '—'}; 本次归档 {today})\n"
                 f"# 注意: 本文件为原文归档, 不做改写; 授权结论见 review-record.md\n"
                 + "=" * 60 + "\n\n")
         (d / "LICENSE.txt").write_text(head + body, encoding="utf-8")
 
         # 4) review-record.md
+        # 核实方法/日期须如实反映**实际执行**的取证动作(不套模板)
+        if verified:
+            method = "三层证据法：本地文件声明 + 上游官方原文 + 官方发行文件 SHA256 比对"
+            vdate, vdoc = VERIFY_DATE, (
+                f"docs/核实报告-{VERIFY_DATE.replace('-', '')}.md · "
+                "config/whitelist.yaml")
+        elif wl:
+            method = ("人工核实登记（白名单条目证据: "
+                      f"{(wl or {}).get('evidence') or '未附'}）")
+            vdate, vdoc = today, "config/whitelist.yaml"
+        else:
+            method = "未执行哈希比对(无归档上游证据); 待追溯上游发行包后补做"
+            vdate, vdoc = today, "config/whitelist.yaml（待登记）"
         rr = f"""# 核实记录 — {s['family']}
 
 | 项 | 内容 |
 |---|---|
-| 核实日期 | 2026-11-09 |
-| 核实方法 | 三层证据法：本地文件声明 + 上游官方原文 + 官方发行文件 SHA256 比对 |
+| 核实日期 | {vdate} |
+| 核实方法 | {method} |
 | 字体版本 | {s.get('font_version') or '未记录'} |
 | 上游来源 | {up[0]} @{up[1]} |
-| 哈希比对 | {HASH_VERIFY.get(k, '未执行')} |
+| 哈希比对 | {HASH_VERIFY.get(k, '未执行(需上游可比对文件)')} |
 | 许可证 | {subject} |
 | 授权条件 | {CONDITIONS.get(k, '待确认')} |
 | **当前授权结论** | **{s.get('authorization_conclusion')}**（扫描器证据性判断） |
 | 使用状态 | {s.get('usage_status')} |
 | 风险/审核状态 | {s.get('risk_level')} / {s.get('review_status')} |
-| 白名单状态 | {'active（已确认允许）' if s.get('license_status') == '已核实' else 'pending_review（待负责人确认转 active）'} |
-| 关联文档 | docs/核实报告-20261109.md · config/whitelist.yaml |
+| 白名单状态 | {wl_text} |
+| 关联文档 | {vdoc} |
 
 ## 整改方式（管理方案 §15.4 五类对照）
 
 | 情况 | 本字体适用 |
 |---|---|
-| ① 已确认允许 → 保留并补充版权声明 | {'☑ 白名单已 active' if s.get('license_status') == '已核实' else '☐ 白名单转 active 后适用'} |
+| ① 已确认允许 → 保留并补充版权声明 | {'☑ 白名单已 active' if wl_status == 'active' else '☐ 白名单登记/签署后适用'} |
 | ② 已确认不允许 → 删除/替换 | ☐ 当前无此证据（需人工判定） |
 | ③ 找不到许可证 → 追溯上游 | {'☑ 已完成追溯与归档' if pack else '☐ 待追溯'} |
 | ④ 字体未被实际使用 → 清理 | {'☐ 见使用状态: ' + str(s.get('usage_status'))} |
@@ -170,7 +207,7 @@ def build_evidence(series: list, repo_name: str) -> list[str]:
 
 ## 签署
 
-- 核实执行：POC 自动化 + 证据归档（2026-11-09）
+- 核实执行：扫描器证据归档（{today}）{'；上游三层证据已于 ' + VERIFY_DATE + ' 执行（见核实报告）' if verified else ''}
 - 审核确认：________________（技术部负责人）　日期：____________
 """
         (d / "review-record.md").write_text(rr, encoding="utf-8")

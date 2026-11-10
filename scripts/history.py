@@ -102,24 +102,52 @@ def load_latest_report(history_dir: Path | None = None) -> dict | None:
     return None
 
 
-def _index_findings(rep: dict) -> dict:
-    """把一份报告里的风险对象展平成 {稳定ID: 摘要}（文件级对比的键）。"""
+def _repo_key(rep) -> str | None:
+    """报告的仓库身份（去凭证）: 换仓库后环比无意义，须先校验。
+
+    优先 repo.source（URL/本地路径），缺失时退回 clone.path。
+    多仓库(list)取各仓库身份排序拼接，任一缺失则整体返回 None。
+    返回 None 表示身份未知（旧格式/合成数据），此时不阻断环比。
+    """
+    from .git_sync import _strip_cred
+    if isinstance(rep, list):
+        keys = [_repo_key(r) for r in rep]
+        return "|".join(sorted(keys)) if keys and all(keys) else None
+    if not isinstance(rep, dict):
+        return None
+    repo = rep.get("repo") or {}
+    src = repo.get("source")
+    if not src:
+        src = (repo.get("clone") or {}).get("path")
+    return _strip_cred(str(src)) if src else None
+
+
+def _index_findings(rep) -> dict:
+    """把一份报告里的风险对象展平成 {稳定ID: 摘要}（文件级对比的键）。
+
+    rep 支持单仓库(dict)与多仓库(list)两种形态（P0-1 缺陷修复:
+    ≥2 仓库时 main 传 list，原实现按 dict 调用 .get 直接崩溃）。
+    """
     from .analyze_risks import norm_name
 
+    reports = rep if isinstance(rep, list) else [rep]
     idx: dict[str, dict] = {}
-    for s in rep.get("font_series", []):
-        key = "font:" + norm_name(s.get("family")) + "|" + (
-            s.get("source_package") or "-")
-        idx[key] = {"type": "font_series", "title": s.get("family"),
-                    "risk_level": s.get("risk_level"),
-                    "conclusion": s.get("authorization_conclusion"),
-                    "license_status": s.get("license_status")}
-    for c in rep.get("repo_license", {}).get("third_party", []):
-        key = "comp:" + (c.get("source_dir") or c.get("component") or "")
-        idx[key] = {"type": "repo_component", "title": c.get("component"),
-                    "risk_level": c.get("risk_level"),
-                    "conclusion": None,
-                    "license_status": c.get("license_status")}
+    for r in reports:
+        if not isinstance(r, dict):
+            continue
+        for s in r.get("font_series", []):
+            key = "font:" + norm_name(s.get("family")) + "|" + (
+                s.get("source_package") or "-")
+            idx[key] = {"type": "font_series", "title": s.get("family"),
+                        "risk_level": s.get("risk_level"),
+                        "conclusion": s.get("authorization_conclusion"),
+                        "license_status": s.get("license_status")}
+        for c in r.get("repo_license", {}).get("third_party", []):
+            key = "comp:" + (c.get("source_dir") or c.get("component") or "")
+            idx[key] = {"type": "repo_component", "title": c.get("component"),
+                        "risk_level": c.get("risk_level"),
+                        "conclusion": None,
+                        "license_status": c.get("license_status")}
     return idx
 
 
@@ -134,6 +162,11 @@ def compare_with_previous(current: dict,
     prev = load_latest_report(history_dir)
     if prev is None:
         return {"available": False, "reason": "无历史批次"}
+    cur_key, prev_key = _repo_key(current), _repo_key(prev)
+    if cur_key and prev_key and cur_key != prev_key:
+        return {"available": False,
+                "reason": f"仓库变更(上一批次 {prev_key} -> 本次 {cur_key}), "
+                          "跨仓库不环比"}
     cur_idx = _index_findings(current)
     prv_idx = _index_findings(prev)
     added = [dict(cur_idx[k], key=k) for k in cur_idx.keys() - prv_idx.keys()]

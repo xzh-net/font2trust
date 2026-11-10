@@ -49,7 +49,16 @@ def load_config(path: str | Path) -> dict:
 
 
 def setup_logging(level: str = "INFO", log_file: str | Path | None = None) -> logging.Logger:
-    """控制台 + 可选文件日志。"""
+    """控制台 + 可选文件日志。
+
+    - Windows 控制台按 UTF-8 输出(修复中文乱码)
+    - 文件日志 mode="w": current/run.log 只保留**本次**运行(批次日志随归档留存)
+    """
+    try:                                  # 控制台编码: GBK 终端下中文/路径乱码
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:                     # noqa: BLE001 重定向流不可重配则忽略
+        pass
     logger = logging.getLogger("font_compliance")
     logger.setLevel(getattr(logging, (level or "INFO").upper(), logging.INFO))
     for h in logger.handlers[:]:        # 关闭旧句柄(防文件句柄泄漏/目录锁)
@@ -66,10 +75,26 @@ def setup_logging(level: str = "INFO", log_file: str | Path | None = None) -> lo
         if not lp.is_absolute():
             lp = PROJECT_ROOT / lp
         lp.parent.mkdir(parents=True, exist_ok=True)
-        fh = logging.FileHandler(lp, encoding="utf-8")
+        fh = logging.FileHandler(lp, encoding="utf-8", mode="w")
         fh.setFormatter(fmt)
         logger.addHandler(fh)
     return logger
+
+
+# URL 凭证 userinfo: //user:pass@ 或 //token@
+_CRED_RE = re.compile(r"//[^/\s:@]+(?::[^/\s@]*)?@")
+_TOKEN_RE = re.compile(r"\b(?:glpat|gldt|glcb|glrt)-[A-Za-z0-9_\-]+")
+
+
+def redact_credentials(text: str) -> tuple[str, int]:
+    """把任意文本中的 URL 凭证与 GitLab token 替换为 ***，返回 (文本, 命中数)。
+
+    用于产物落盘前的兜底脱敏（P0-2 缺陷修复）：报告/归档可能被分发，
+    任何写入磁盘的文本都不得含凭证。
+    """
+    text, n1 = _CRED_RE.subn("//***@", text or "")
+    text, n2 = _TOKEN_RE.subn("***", text)
+    return text, n1 + n2
 
 
 def sha256_file(path: str | Path) -> str:
